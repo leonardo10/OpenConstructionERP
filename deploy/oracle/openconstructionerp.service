@@ -1,0 +1,37 @@
+[Unit]
+Description=OpenConstructionERP with Neon PostgreSQL
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=openconstructionerp
+Group=openconstructionerp
+WorkingDirectory=/opt/openconstructionerp/app
+EnvironmentFile=/etc/openconstructionerp/environment
+Environment=SERVE_FRONTEND=true
+Environment=OE_DATA_DIR=/var/lib/openconstructionerp
+Environment=HOME=/var/lib/openconstructionerp
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/openconstructionerp/venv/bin/python -m uvicorn app.main:create_app --factory --app-dir backend --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/openconstructionerp
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
