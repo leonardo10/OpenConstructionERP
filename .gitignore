@@ -530,3 +530,5 @@ email-delivery-failures*.jsonl
 
 # Locale bootstrap batches, see scripts/i18n_new_locale.py
 .i18n-work/
+.neon
+.local-data/

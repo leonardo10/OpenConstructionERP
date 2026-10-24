@@ -177,7 +177,7 @@ def build_provenance_tag(version: str) -> str:
 
 
 def _find_env_file() -> list[str]:
-    """Locate backend/.env regardless of the process CWD.
+    """Locate backend and repo environment files regardless of process CWD.
 
     Uvicorn may be launched from the repo root, backend/, or anywhere else,
     and pydantic-settings's default ``env_file=".env"`` is resolved against
@@ -189,6 +189,7 @@ def _find_env_file() -> list[str]:
     candidates = [
         here.parent.parent / ".env",  # backend/.env (app/ is one up)
         here.parent.parent.parent / ".env",  # repo root .env (optional)
+        here.parent.parent.parent / ".env.local",  # Neon CLI's default env output
     ]
     return [str(p) for p in candidates if p.is_file()]
 
@@ -214,9 +215,42 @@ def _canonicalize_db_url(url: str, *, driver: str) -> str:
     try:
         from sqlalchemy.engine import make_url
 
-        return make_url(url).set(drivername=f"postgresql+{driver}").render_as_string(hide_password=False)
+        parsed = make_url(url)
+        query = dict(parsed.query)
+        if driver == "asyncpg":
+            # Neon supplies libpq DSNs. SQLAlchemy passes query parameters as
+            # asyncpg kwargs, which accepts ssl, not sslmode/channel_binding.
+            sslmode = query.pop("sslmode", None)
+            if sslmode is not None:
+                query["ssl"] = sslmode
+            if query.pop("channel_binding", None) is not None:
+                # asyncpg cannot request libpq channel binding. Verify the
+                # server certificate and hostname rather than weakening TLS.
+                query["ssl"] = "verify-full"
+        elif "ssl" in query:
+            query.setdefault("sslmode", query.pop("ssl"))
+        return parsed.set(drivername=f"postgresql+{driver}", query=query).render_as_string(
+            hide_password=False
+        )
     except Exception:  # noqa: BLE001 - never block boot on a URL we cannot parse
         return url
+
+
+def asyncpg_tls_connect_args(url: str) -> dict:
+    """Use system certificate roots for asyncpg's hostname-verified TLS mode.
+
+    The string 'verify-full' otherwise makes asyncpg require a libpq-style
+    ~/.postgresql/root.crt, which a normal Windows/Linux install need not have.
+    An SSLContext verifies certificates and hostnames with the OS trust store.
+    """
+    import ssl
+
+    from sqlalchemy.engine import make_url
+
+    parsed = make_url(url)
+    if parsed.query.get("ssl") == "verify-full":
+        return {"ssl": ssl.create_default_context()}
+    return {}
 
 
 def _userinfo_split_at_the_wrong_at_sign(url: str) -> bool:
@@ -356,6 +390,8 @@ class Settings(BaseSettings):
     # or set DATABASE_URL to an external PostgreSQL.
     database_url: str = ""
     database_sync_url: str = ""
+    # Neon env pull supplies a separate direct connection for migrations.
+    database_url_unpooled: str = ""
     database_pool_size: int = 24
     database_max_overflow: int = 10
     database_echo: bool = False
@@ -882,6 +918,8 @@ class Settings(BaseSettings):
         always agree on the same cluster instead of one of them falling back to
         an unconfigured engine.
         """
+        if self.database_url_unpooled.strip() and not self.database_sync_url.strip():
+            self.database_sync_url = _canonicalize_db_url(self.database_url_unpooled, driver="psycopg2")
         if self.database_url.startswith("postgresql") and not self.database_sync_url.strip():
             self.database_sync_url = _canonicalize_db_url(self.database_url, driver="psycopg2")
         elif self.database_sync_url.startswith("postgresql") and not self.database_url.strip():

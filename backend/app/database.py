@@ -21,7 +21,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.config import get_settings
+from app.config import asyncpg_tls_connect_args, get_settings
 
 _slow_query_logger = logging.getLogger("slow_queries")
 
@@ -327,6 +327,8 @@ def create_engine_from_settings():
         host = ""
     if host in ("", "localhost", "127.0.0.1", "::1"):
         kwargs["connect_args"] = {**kwargs.get("connect_args", {}), "ssl": False}
+    else:
+        kwargs["connect_args"] = {**kwargs.get("connect_args", {}), **asyncpg_tls_connect_args(url)}
 
     # Test mode: use NullPool so every checkout opens a fresh asyncpg
     # connection on the current event loop. pytest-asyncio runs each test in its

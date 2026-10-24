@@ -115,7 +115,10 @@ async def _dispatch_job_via_dedicated_engine(
     # transaction for that whole time, and the request-side value would cut it.
     # See ``Settings.database_jobs_idle_in_transaction_timeout`` for why the
     # number is an order of magnitude rather than a measurement. 0 disables it.
-    from app.config import get_settings
+    from app.config import asyncpg_tls_connect_args, get_settings
+
+    if host not in ("", "localhost", "127.0.0.1", "::1"):
+        connect_args.update(asyncpg_tls_connect_args(str(base_engine.url.render_as_string(hide_password=False))))
 
     idle_ms = max(0, get_settings().database_jobs_idle_in_transaction_timeout) * 1000
     if idle_ms:
