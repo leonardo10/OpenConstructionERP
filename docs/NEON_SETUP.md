@@ -94,13 +94,38 @@ runner resources and billing allowances. Review those before using them.
   passed and was rolled back.
 - Running backend: HTTP `/api/health` returned 200, `database=ok`,
   `schema_matches_models=true`, and 213/213 modules loaded.
-- Overall backend health is currently `degraded` solely because the frontend
-  build is absent (`frontend_dist_present=false`).
-- Local `npm run build` was still running at this checkpoint; it has not been
-  recorded as passed. The built frontend HTTP checks remain pending.
+- After extracting the frontend artifact, backend health is `healthy`.
+- Local `npm run build` was stopped after excessive memory use.
+- Root `npm run build` passed on GitHub Actions at commit
+  `ad99b84a1747d9dfe8be66698a11dbacc5c922e7`:
+  https://github.com/leonardo10/OpenConstructionERP/actions/runs/40064984261
+  TypeScript checks passed; Vite transformed 8,047 modules and reported
+  `built in 2m 26s`. The full job took 8m 16s, excluding runner queue time.
+- Artifact `construction-erp-frontend`, ID `12549299693`, is 66,611,453 bytes.
+  ZIP SHA256: `7d15613bb7257727869eb6b3bbaaa4517ef7d9afef55a8dbe74073942be4599a`.
+- Artifact ZIP SHA256 was verified before extraction to `frontend/dist`.
+- Vite preview runs at http://127.0.0.1:4173 and proxies `/api` to the local
+  Python backend on port 8000. The login page rendered in Edge.
+- Full verification exited 0:
+  `PASS direct migration connection: SELECT 1; client TLS enabled`
+  `PASS application SQLAlchemy/asyncpg: write/read round trip; transaction rolled back`
+  `PASS HTTP /api/health: database=ok, status=healthy`
+  `PASS HTTP /: built frontend served`
+- Authenticated ERP workflows have not been tested; no administrator account
+  was created during these checks.
+- Build warnings include circular/manual chunks and large JavaScript chunks;
+  these did not fail the build. Artifact upload also warned about its action's
+  deprecated Node 20 target, executed under Node 24 successfully.
+- Fork CI/CI-PostgreSQL matrices were canceled to release runner capacity.
+  The successful evidence above is the dedicated build and targeted local
+  checks, not a passing result for the full upstream test suite.
 - Initial `neon init` hit a timeout installing plugins for Codex/Claude.
   Retrying with `--no-agent-setup` completed project setup. The downloaded
   Neon skills were consulted directly.
-- The remote GitHub workflow has been prepared and YAML-checked but has not
-  been published or executed. Publishing a public fork awaits user approval.
+- User authorized GitHub as fallback. ISH-Dev has 8 GB RAM, roughly 2 GB
+  available and no swap, so the build is moving to the public GitHub fork.
+  No services or memory settings on ISH-Dev were changed.
 - No GCP VM, Cloud Run service, or Vercel website deployment was created.
+- The user is preparing Oracle Always Free for the backend. Deployment must
+  use the fork's Neon-aware backend code; the earlier AMD64/local-Postgres
+  compose template outside this repository is not an Oracle ARM/Neon setup.
